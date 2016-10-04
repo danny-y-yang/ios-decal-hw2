@@ -18,11 +18,6 @@ class ViewController: UIViewController {
     //            We will be using the result label to run autograded tests.
     // MARK: The label to display our calculations
     var resultLabel = UILabel()
-    
-    // TODO: This looks like a good place to add some data structures.
-    //       One data structure is initialized below for reference.
-    var someDataStructure: [String] = [""]
-    
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -43,54 +38,217 @@ class ViewController: UIViewController {
         // Dispose of any resources that can be recreated.
     }
     
-    // TODO: A method to update your data structure(s) would be nice.
-    //       Modify this one or create your own.
-    func updateSomeDataStructure(_ content: String) {
-        print("Update me like one of those PCs")
+    // Create an instance of Helper to use for calculations and other utilities
+    let model = Helper()
+    
+
+    // Displays the text resulting from a calculation or button press
+    var resultDisplay: String {
+        get {
+            return resultLabel.text!
+        }
+        set {
+            if model.numbersDisplayed < 7 {
+                resultLabel.text = newValue
+            }
+        }
     }
     
-    // TODO: Ensure that resultLabel gets updated.
-    //       Modify this one or create your own.
-    func updateResultLabel(_ content: String) {
-        print("Update me like one of those PCs")
-    }
-    
-    
-    // TODO: A calculate method with no parameters, scary!
-    //       Modify this one or create your own.
-    func calculate() -> String {
-        return "0"
-    }
-    
-    // TODO: A simple calculate method for integers.
-    //       Modify this one or create your own.
-    func intCalculate(a: Int, b:Int, operation: String) -> Int {
-        print("Calculation requested for \(a) \(operation) \(b)")
-        return 0
-    }
-    
-    // TODO: A general calculate method for doubles
-    //       Modify this one or create your own.
-    func calculate(a: String, b:String, operation: String) -> Double {
-        print("Calculation requested for \(a) \(operation) \(b)")
-        return 0.0
-    }
     
     // REQUIRED: The responder to a number button being pressed.
+    
+    // User starts typing when he or she presses the first digit of a number or presses an operator
+    var inMiddleOfTyping = false
+
     func numberPressed(_ sender: CustomButton) {
         guard Int(sender.content) != nil else { return }
         print("The number \(sender.content) was pressed")
-        // Fill me in!
+        
+        // Displays new number if user stops typing
+        if (inMiddleOfTyping) {
+                resultDisplay = resultDisplay + sender.content
+        } else {
+                resultDisplay = sender.content
+                inMiddleOfTyping = true
+        }
+        
+        // Sets operand depending on whether or not operator has been set
+        if model.operatorSet == "" {
+            model.firstOperand = resultDisplay
+        } else {
+            model.secondOperand = resultDisplay
+        }
+        
+        // Increment # of numbers displayed
+        model.numbersDisplayed += 1
     }
+    
+    var previousOperatorWasEqual = false
     
     // REQUIRED: The responder to an operator button being pressed.
     func operatorPressed(_ sender: CustomButton) {
-        // Fill me in!
+        print("Pressed \(sender.content)")
+        model.numbersDisplayed = 0
+        switch sender.content {
+            case "C":
+                inMiddleOfTyping = false
+                resultDisplay = String(0)
+                model.firstOperand = ""
+                model.secondOperand = ""
+                model.operatorSet = ""
+                model.numbersDisplayed = 0
+            case "%":
+                resultDisplay = String(Double(resultDisplay)! / 100)
+            case "+/-":
+                
+                // Will not work if there is already 7 characters in the display
+                if model.numbersDisplayed >= 7 {
+                    if Double(resultDisplay)! > 0 {
+                        return
+                    }
+                }
+                
+                // Makes sure the displayed value is still the original type
+                if Double(resultDisplay)!.truncatingRemainder(dividingBy: 1) != 0 {
+                    resultDisplay = String(-Double(resultDisplay)!)
+                    
+                } else {
+                    resultDisplay = String(-Int(resultDisplay)!)
+                }
+                
+                if model.secondOperand != "" {
+                    model.secondOperand = resultDisplay
+                } else {
+                    model.firstOperand = resultDisplay
+                }
+            
+            case "=":
+                
+                inMiddleOfTyping = false
+                previousOperatorWasEqual = true
+                
+                // Make sure the first and second operands aren't nil
+                guard Double(model.firstOperand) != nil else { return }
+                guard Double(model.secondOperand) != nil else { return }
+                
+                // If either of these two are doubles, then use the general calculation function to return a double
+                if Double(model.firstOperand)?.truncatingRemainder(dividingBy: 1) != 0 ||
+                    Double(model.secondOperand)?.truncatingRemainder(dividingBy: 1) != 0 {
+                    let first = model.firstOperand
+                    let second = model.secondOperand
+                    model.firstOperand = String(model.calculate(a: first, b: second, operation: model.operatorSet))
+                    
+                // Both are integers, so use intCalculation
+                } else {
+                    let first = Int(model.firstOperand)!
+                    let second = Int(model.secondOperand)!
+                    model.firstOperand = model.intCalculate(a: first, b: second, operation: model.operatorSet)
+                }
+                
+                // Display numbers only if the display has less than or equal to seven numbers
+                if model.firstOperand.characters.count <= 7 {
+                    resultDisplay = model.firstOperand
+                    
+                } else {
+                    let scientificNotation = model.changeToScientific(x: Double(model.firstOperand)!)
+                    if (scientificNotation.characters.count <= 7) {
+                        resultDisplay = scientificNotation
+                    }
+                }
+        
+            // Operator pressed was +, -, *, or /
+            default:
+                
+                inMiddleOfTyping = false
+                
+                // Allows for consecutive arithmetic operators
+                if previousOperatorWasEqual {
+                    model.secondOperand = ""
+                }
+                
+                // Save the current operation if the current operator is + or -, so order of operations is respected
+                if (sender.content == "*" || sender.content == "/") && model.secondOperand != "" {
+                    if model.operatorSet == "+" || model.operatorSet == "-" {
+                        model.accumulated = model.firstOperand
+                        model.pendingOperator = model.operatorSet
+                        model.firstOperand = model.secondOperand
+                        model.operatorSet = sender.content
+                        model.secondOperand = ""
+                        break;
+                    }
+                }
+                
+                    
+                // Allow for consecutive operations
+                if model.secondOperand != "" {
+                        
+                    // If either of these two are doubles, then use the general calculation function and return a double
+                    if Double(model.firstOperand)?.truncatingRemainder(dividingBy: 1) != 0 ||
+                        Double(model.secondOperand)?.truncatingRemainder(dividingBy: 1) != 0 {
+                        let first = model.firstOperand
+                        let second = model.secondOperand
+                        model.firstOperand = String(model.calculate(a: first, b: second, operation: model.operatorSet))
+                        
+                    // Both are integers so use intCalculate
+                    } else {
+                        let first = Int(model.firstOperand)!
+                        let second = Int(model.secondOperand)!
+                        model.firstOperand = model.intCalculate(a: first, b: second, operation: model.operatorSet)
+                    }
+                    
+                    
+                    // Display numbers only if the display has less than or equal to seven numbers
+                    if model.firstOperand.characters.count <= 7 {
+                        
+                        resultDisplay = model.firstOperand
+                        
+                    } else {
+                        let scientificNotation = model.changeToScientific(x: Double(model.firstOperand)!)
+                        if (scientificNotation.characters.count <= 7) {
+                            resultDisplay = scientificNotation
+                        }
+                        return
+                    }
+                    
+                // No previous accumulated values
+                } else {
+                    model.firstOperand = resultDisplay
+                    
+                }
+                model.operatorSet = sender.content
+                model.secondOperand = ""
+            }
     }
+    
+        
     
     // REQUIRED: The responder to a number or operator button being pressed.
     func buttonPressed(_ sender: CustomButton) {
-       // Fill me in!
+        if model.numbersDisplayed >= 7 { return }
+        if sender.content == "0" {
+            print("pressed 0")
+            
+            if (inMiddleOfTyping) {
+                resultDisplay = resultDisplay + sender.content
+            } else {
+                resultDisplay = sender.content
+                inMiddleOfTyping = true
+            }
+            
+            // Sets operand depending on whether or not operator has been set
+            if model.operatorSet == "" {
+                model.firstOperand = resultDisplay
+            } else {
+                model.secondOperand = resultDisplay
+            }
+            
+        } else if sender.content == "." {
+            inMiddleOfTyping = true
+            if resultDisplay.characters.last != "." {
+                resultDisplay = resultDisplay + sender.content
+            }
+        }
+        model.numbersDisplayed += 1
     }
     
     // IMPORTANT: Do NOT change any of the code below.
